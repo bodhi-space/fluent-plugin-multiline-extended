@@ -11,12 +11,12 @@ module Fluent
         tail_watcher.line_buffer_timer_flusher.reset_timer if tail_watcher.line_buffer_timer_flusher
 
         @parser.splitter(tail_watcher.line_buffer.to_s + (lines.is_a?(Array) ? lines.join('') : '')).each do |event|
-          tail_watcher.line_buffer = ''
+          tail_watcher.line_buffer = nil
           @parser.parse(event) do |time, record|
             if time && record
               convert_line_to_event(event, es)
             else
-              tail_watcher.line_buffer += event
+              tail_watcher.line_buffer = event unless event.empty?
             end
           end
         end
