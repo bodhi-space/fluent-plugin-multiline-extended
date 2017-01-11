@@ -29,15 +29,16 @@ module Fluent
 
           if [ "head", "tail" ].include?(@splitter_matches)
             if @splitter_matches == 'tail'
-              events << "#{chunk}#{matched}"
+              event = chunk + matched
             else
-              events << "#{saved}#{chunk}"
+              event = saved + chunk
               saved = matched
             end
           else
-            events << chunk
+            event = chunk
           end
 
+          events << event if event =~ /\S/
         end
 
         return events
