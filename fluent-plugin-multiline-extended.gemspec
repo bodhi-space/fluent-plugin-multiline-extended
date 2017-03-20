@@ -4,7 +4,7 @@ $LOAD_PATH.unshift(lib) unless $LOAD_PATH.include?(lib)
 
 Gem::Specification.new do |gem|
   gem.name          = 'fluent-plugin-multiline-extended'
-  gem.version       = '1.0.0'
+  gem.version       = '1.0.1'
   gem.authors       = ['Alex Yamauchi']
   gem.email         = ['alex.yamauchi@hotschedules.com']
   gem.licenses      = [ 'Apache-2.0']
@@ -19,4 +19,8 @@ Gem::Specification.new do |gem|
   gem.require_paths = ['lib']
 
   gem.add_runtime_dependency 'fluentd'
+
+  gem.signing_key   = File.expand_path('~/certs/oss@hotschedules.com.key') if $0 =~ /gem\z/
+  gem.cert_chain    = %w[certs/oss@hotschedules.com.cert]
+
 end
