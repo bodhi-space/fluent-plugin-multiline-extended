@@ -91,7 +91,7 @@ Or, if you're using td-client, you can call td-client's gem command
 ```
 <source>
   path <filename>
-  type tail_extended
+  type tail_multiline_extended
   format multiline_extended
   splitter_matches (head or tail -- defaults to head)
   splitter_regex (regex for splitting events which can contain newlines)
