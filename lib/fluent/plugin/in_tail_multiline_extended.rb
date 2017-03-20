@@ -16,7 +16,7 @@ module Fluent
             if time && record
               convert_line_to_event(event, es, tail_watcher)
             else
-              tail_watcher.line_buffer = event unless event.empty?
+              tail_watcher.line_buffer = event
             end
           end
         end
