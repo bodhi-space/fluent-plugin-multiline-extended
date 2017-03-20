@@ -1,10 +1,80 @@
----
+# Extended Multiline plugin for [Fluentd](http://fluentd.org)
 
-# Fluent::Plugin::Multiline-Extended, a plugin for [Fluentd](http://fluentd.org)
+These plugins extend built-in multiline tail parsing to allow for event boundary beyond single line regex matching using the "format_firstline" parameter.  In particular,
++ boundary detection can be done using regex matches at either the beginning or the end of the event, and
++ boundary detection regexes to span more than one line.
 
-Multiline-Extended plugin extends built-in multiline tail parsing to allow buffer splitting by adding support for:
-+ Detecting log entry boundries using regex matches at either the beginning or the end
-+ Allowing boundary detection regexes to span more tnan one line (in particular, needed for Rabbitmq logs).
+## Overview
+The plugins provided subclass the [tail plugin](http://docs.fluentd.org/categories/in_tail) and [parser](http://docs.fluentd.org/articles/parser-plugin-overview) in order to extend event boundary detection functionality.   The original use case for creating this extension was in an attempt to deal with RabbitMQ logs in a coherent way, since they require a multiline regex in order to properly and consistently determine log event boundaries (without throwing errors during normal operation, at least) since information from two lines is required.   Other used have since cropped up where this functionality is needed (for example, logs which do not always terminate entries with a newlines).
+
+RabbitMQ "INFO REPORT" messages normally look like this.
+
+```
+
+=INFO REPORT==== 1-Nov-2016::23:25:39 ===
+FHC read buffering:  OFF
+FHC write buffering: ON
+```
+
+Note that the blank line is at the _beginning_ of the event, not the end.  The only way to correctly specify the format_firstline for the multiline plugin so that it will not continually throw timeout errors is to set it to match a blank line.  This would not be a problem if RabbitMQ did not ocassionally generate garbage like the following.
+
+```
+
+=INFO REPORT==== 1-Nov-2016::23:26:09 ===
+Timeout contacting cluster nodes: ['rabbit@host-a',
+                                   'rabbit@host-b','rabbit@host-c',
+                                   'rabbit@host-d',
+                                   'rabbit@host-e'].
+
+BACKGROUND
+==========
+
+This cluster node was shut down while other nodes were still running.
+To avoid losing data, you should start the other nodes first, then
+start this one. To force this node to start, first invoke
+"rabbitmqctl force_boot". If you do so, any changes made on other
+cluster nodes after this one was shut down may be lost.
+
+DIAGNOSTICS
+===========
+
+attempted to contact: ['rabbit@host-a','rabbit@host-b',
+                       'rabbit@host-c','rabbit@host-d',
+                       'rabbit@host-e']
+
+rabbit@host-a:
+  * unable to connect to epmd (port 4369) on host-a: nxdomain (non-existing domain)
+
+rabbit@host-b:
+  * connected to epmd (port 4369) on host-b
+  * node rabbit@host-b up, 'rabbit' application not running
+  * running applications on rabbit@host-b: [ssl,public_key,crypto,xmerl,
+                                                syntax_tools,inets,asn1,
+                                                compiler,ranch,sasl,stdlib,
+                                                kernel]
+  * suggestion: start_app on rabbit@host-b
+rabbit@host-c:
+  * connected to epmd (port 4369) on host-c
+  * node rabbit@host-c up, 'rabbit' application not running
+  * running applications on rabbit@host-c: [ssl,syntax_tools,public_key,
+                                                asn1,compiler,ranch,xmerl,
+                                                inets,crypto,sasl,stdlib,
+                                                kernel]
+  * suggestion: start_app on rabbit@host-c
+rabbit@host-d:
+  * unable to connect to epmd (port 4369) on host-d: nxdomain (non-existing domain)
+
+rabbit@host-e:
+  * unable to connect to epmd (port 4369) on host-e: nxdomain (non-existing domain)
+
+
+current node details:
+- node name: 'rabbit@host-a'
+- home dir: /var/lib/rabbitmq
+- cookie hash: XXXXXXXXXXXXXXXXXXXXXX==
+```
+
+There is no way to configure the multiline plugin format_firstline so that it will treat the following RabbitMQ as a single log event without throwing parsing errors during normal operattion: specifying a blank line will not work due to newlines embedded in records and Specifying "^=[A-Z]" will not work (at least, not without continually generating timeout errors, since this matches the _second_ line of the event record, not the first).  The ability to specify the multiline regex "\n=[A-Z]" is actually required to parse these logs without generating parsing errors during normal operation.
 
 ## Installation
 
@@ -12,106 +82,38 @@ Use ruby gem as :
 
     gem 'fluent-plugin-multiline-extended'
 
-Or, if you're using td-client, you can call td-client's gem
+Or, if you're using td-client, you can call td-client's gem command
 
-    $ /usr/lib64/fluent/ruby/bin/gem install fluent-plugin-multiline-extended
-
-## Base Configuration
-Multiline-Extended extends [tail plugin](http://docs.fluentd.org/categories/in_tail) and [parser](http://docs.fluentd.org/articles/parser-plugin-overview)
+    /opt/td-agent/embedded/bin/gem install fluent-plugin-multiline-extended
 
 ## Configuration
-### Additional Parameters
- name                 | type                            | description
-----------------------|---------------------------------|---------------------------
-type                  | string (required)               | type of plugin should be **tail_extended**
-format                | string (required)               | type of plugin should be **multiline_extended**
+
+```
+<source>
+  path <filename>
+  type tail_extended
+  format multiline_extended
+  splitter_matches (head or tail -- defaults to head)
+  splitter_regex (regex for splitting events which can contain newlines)
+  [ additional tail or format parameters ]
+</source>
+```
 
 ## Examples
-### Rabbitmq log with embedded multiline report
-#### Input
-```
-< Add an example of what we are coping with >
-```
-#### Parameters
-```
-tag test
-format /^(?<time>\d{4}-\d{1,2}-\d{1,2} \d{1,2}:\d{1,2}:\d{1,2}) \[(?<thread>.*)\] (?<level>[^\s]+)(?<message>.*)/
-```
-#### Output
-```
-< Add parsed output >
-```
 
-### Case where first line does not have any name capture
-#### Input
+### RabbitMQ input parser that correctly detects event boundaries
 ```
-----
-time=2013-3-03 14:27:33 
-message=test1
-----
-time=2013-3-03 14:27:34
-message=test2
+<source>
+  type tail_multiline_extended
+  format multiline_extended
+  splitter_matches head
+  splitter_regex /\n=[A-Z]+ REPORT=/
+  format1 /^\s*(?<full_message>=(?<report_type>\S+)\s+REPORT====\s*(?<time>\S+) ===[\*\s]*(?<message>[^\n]*[^\*\s]).*)[\*\s]*$/
+  time_format %e-%b-%Y::%H:%M:%S
+  multiline_flush_interval 5s
+  path /var/log/rabbitmq/*.log
+  pos_file /var/lib/td-agent/rabbitmq.pos
+  tag *.rabbitmq.RABBITMQ
+</source>
 ```
-
-#### Parameters
-```
-tag test
-format /time=(?<time>\d{4}-\d{1,2}-\d{1,2} \d{1,2}:\d{1,2}:\d{1,2}).*message=(?<message>.*)/
-format_firstline /----/
-```
-
-#### Output
-```
-2013-03-03 14:27:33 +0900 test: {"message":"test1"}
-2013-03-03 14:27:34 +0900 test: {"message":"test2"}
-```
-
-### Case where too long regexp is required
-#### Input
-```
-Started GET "/users/" for 127.0.0.1 at 2013-06-14 12:00:04 +0900
-Processing by UsersController#index as HTML
-  Rendered users/index.html.erb within layouts/application (0.5ms)
-Completed 200 OK in 821ms (Views: 819.5ms | ActiveRecord: 0.0ms)
-
-
-Started GET "/users/123/" for 127.0.0.1 at 2013-06-14 12:00:11 +0900
-Processing by UsersController#show as HTML
-  Parameters: {"user_id"=>"123"}
-  Rendered users/show.html.erb within layouts/application (0.3ms)
-Completed 200 OK in 4ms (Views: 3.2ms | ActiveRecord: 0.0ms)
-```
-
-#### Parameters
-```
-tag test
-format_firstline /^Started/
-format /Started (?<method>[^ ]+) "(?<path>[^"]+)" for (?<host>[^ ]+) at (?<time>[^ ]+ [^ ]+ [^ ]+)\nProcessing by (?<controller>[^\u0023]+)\u0023(?<controller_method>[^ ]+) as (?<format>[^ ]+?)\n(  Parameters: (?<parameters>[^ ]+)\n)?  Rendered (?<template>[^ ]+) within (?<layout>.+) \([\d\.]+ms\)\nCompleted (?<code>[^ ]+) [^ ]+ in (?<runtime>[\d\.]+)ms \(Views: (?<view_runtime>[\d\.]+)ms \| ActiveRecord: (?<ar_runtime>[\d\.]+)ms\)/
-```
-
-It's too long format. You can rewrite above parameters with `format{1..20}`.
-
-```
-tag test
-format_firstline /^Started/
-format1 /Started (?<method>[^ ]+) "(?<path>[^"]+)" for (?<host>[^ ]+) at (?<time>[^ ]+ [^ ]+ [^ ]+)\n/
-format2 /Processing by (?<controller>[^\u0023]+)\u0023(?<controller_method>[^ ]+) as (?<format>[^ ]+?)\n/
-format3 /(  Parameters: (?<parameters>[^ ]+)\n)?/
-format4 /  Rendered (?<template>[^ ]+) within (?<layout>.+) \([\d\.]+ms\)\n/
-format5 /Completed (?<code>[^ ]+) [^ ]+ in (?<runtime>[\d\.]+)ms \(Views: (?<view_runtime>[\d\.]+)ms \| ActiveRecord: (?<ar_runtime>[\d\.]+)ms\)/
-```
-
-#### Output
-```
-2013-06-14 12:00:04 +0900 test: {"method":"GET","path":"/users/","host":"127.0.0.1","controller":"UsersController","controller_method":"index","format":"HTML","template":"users/index.html.erb","layout":"layouts/application","code":"200","runtime":"821","view_runtime":"819.5","ar_runtime":"0.0"}
-2013-06-14 12:00:11 +0900 test: {"method":"GET","path":"/users/123/","host":"127.0.0.1","controller":"UsersController","controller_method":"show","format":"HTML","parameters":"{\"user_id\"=>\"123\"}","template":"users/show.html.erb","layout":"layouts/application","code":"200","runtime":"4","view_runtime":"3.2","ar_runtime":"0.0"}
-```
-
-## Contributing
-
-1. Fork it
-2. Create your feature branch (`git checkout -b my-new-feature`)
-3. Commit your changes (`git commit -am 'Add some feature'`)
-4. Push to the branch (`git push origin my-new-feature`)
-5. Create new Pull Request
 
