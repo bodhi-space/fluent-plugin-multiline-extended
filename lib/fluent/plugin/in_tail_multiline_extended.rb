@@ -9,17 +9,18 @@ module Fluent
       if @parser.has_splitter?
         es = MultiEventStream.new
         tail_watcher.line_buffer_timer_flusher.reset_timer if tail_watcher.line_buffer_timer_flusher
-        tail_watcher.line_buffer = tail_watcher.line_buffer.to_s + (lines.is_a?(Array) ? lines.join('') : '')
-        tail_watcher.line_buffer = nil if tail_watcher.line_buffer =~ /^\s*$/
-        if tail_watcher.line_buffer
-          @parser.splitter(tail_watcher.line_buffer).each do |event|
-            tail_watcher.line_buffer.partition(event)[2]
+        lb = tail_watcher.line_buffer.to_s + (lines.is_a?(Array) ? lines.select {|e| e.is_a?(String)}.join('') : '')
+        tail_watcher.line_buffer = ''
+
+        if not lb.empty?
+          events = @parser.splitter(lb)
+          tail_watcher.line_buffer = events.pop
+          events.each do |event|
             @parser.parse(event) do |time, record|
-              convert_line_to_event(event, es, tail_watcher)
+              convert_line_to_event(event, es, tail_watcher) if time && record
             end
           end
         end
-        tail_watcher.line_buffer = nil if tail_watcher.line_buffer =~ /^\s*$/
         es
       else
         super(lines, tail_watcher)

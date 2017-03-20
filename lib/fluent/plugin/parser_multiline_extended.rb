@@ -23,30 +23,32 @@ module Fluent
       def splitter(glob)
         events = []
         saved = ''
-        event = ''
+        remainder = glob
+        matched = ''
 
-        until glob.empty? do
+        until matched.empty? and glob.empty? do
           chunk, matched, glob = glob.partition(@splitter_regex)
-
-          event << chunk
 
           if not matched.empty?
             if @splitter_matches and @splitter_matches == 'head'
-              events << event
-              event = matched
+              events << saved + chunk unless saved.empty? and chunk.empty?
+              saved = matched
+              remainder = matched + glob
             elsif @splitter_matches and @splitter_matches == 'tail'
-              events << event + matched
-              event = ''
+              events << chunk + matched
+              remainder = glob
             else
-              events << event
-              event = ''
+              events << chunk
+              remainder = glob
             end
           end
+            
         end
 
+        events << remainder
         return events
-      end
 
+      end
     end
   end
 end
