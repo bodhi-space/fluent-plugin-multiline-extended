@@ -4,7 +4,7 @@ $LOAD_PATH.unshift(lib) unless $LOAD_PATH.include?(lib)
 
 Gem::Specification.new do |gem|
   gem.name          = 'fluent-plugin-multiline-extended'
-  gem.version       = '1.0.1'
+  gem.version       = '1.0.2'
   gem.authors       = ['Alex Yamauchi']
   gem.email         = ['alex.yamauchi@hotschedules.com']
   gem.licenses      = [ 'Apache-2.0']
