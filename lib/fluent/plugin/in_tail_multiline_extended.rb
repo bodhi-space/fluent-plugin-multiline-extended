@@ -14,7 +14,7 @@ module Fluent
           tail_watcher.line_buffer = nil
           @parser.parse(event) do |time, record|
             if time && record
-              convert_line_to_event(event, es)
+              convert_line_to_event(event, es, tail_watcher)
             else
               tail_watcher.line_buffer = event unless event.empty?
             end
