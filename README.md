@@ -74,13 +74,13 @@ current node details:
 - cookie hash: XXXXXXXXXXXXXXXXXXXXXX==
 ```
 
-There is no way to configure the multiline plugin format_firstline so that it will treat the following RabbitMQ as a single log event without throwing parsing errors during normal operattion: specifying a blank line will not work due to newlines embedded in records and Specifying "^=[A-Z]" will not work (at least, not without continually generating timeout errors, since this matches the _second_ line of the event record, not the first).  The ability to specify the multiline regex "\n=[A-Z]" is actually required to parse these logs without generating parsing errors during normal operation.
+There is no way to configure the multiline plugin format_firstline so that it will treat the following RabbitMQ as a single log event without throwing parsing errors during normal operation: specifying a blank line will not work due to newlines embedded in records and Specifying "^=[A-Z]" will not work (at least, not without continually generating parsing errors due to the unexpected blank lines since this matches the _second_ line of the event record, not the first).  The ability to specify the multiline regex "\n=[A-Z]" is actually required to parse these logs without generating parsing errors during normal operation.
 
 ## Installation
 
 Use ruby gem as :
 
-    gem 'fluent-plugin-multiline-extended'
+    gem install fluent-plugin-multiline-extended
 
 Or, if you're using td-client, you can call td-client's gem command
 
