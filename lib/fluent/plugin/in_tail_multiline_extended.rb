@@ -1,7 +1,5 @@
-require 'fluent/plugin/in_tail'
-
 module Fluent
-  class NewNewTailInput < NewTailInput
+  class NewTailInput < Fluent::Plugin::TailInput
 
     Plugin.register_input('tail_multiline_extended', self)
 
