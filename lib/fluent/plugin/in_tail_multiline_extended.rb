@@ -1,3 +1,4 @@
+require 'fluent/plugin/in_tail'
 module Fluent
   class NewTailInput < Fluent::Plugin::TailInput
 
